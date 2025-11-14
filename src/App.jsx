@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { socket } from "./socket";
 
+const PRIMARY = "#1D4ED8";
+
 const pageStyle = {
   fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
   minHeight: "100vh",
@@ -13,28 +15,26 @@ const cardStyle = {
   background: "white",
   borderRadius: "16px",
   padding: "20px",
-  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.08)",
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)", // 更柔和一点
 };
 
 const tabButton = (active) => ({
   padding: "8px 16px",
   borderRadius: "999px",
-  border: "none",
+  border: "1px solid",
   cursor: "pointer",
   fontWeight: 600,
   marginRight: "8px",
-  background: active ? "#111827" : "transparent",
+  background: active ? PRIMARY : "transparent",
   color: active ? "white" : "#4b5563",
-  borderWidth: "1px",
-  borderStyle: "solid",
-  borderColor: active ? "#111827" : "#e5e7eb",
+  borderColor: active ? PRIMARY : "#e5e7eb",
 });
 
 const primaryButton = {
   padding: "10px 18px",
   borderRadius: "999px",
   border: "none",
-  background: "#111827",
+  background: PRIMARY,
   color: "white",
   cursor: "pointer",
   fontWeight: 600,
@@ -51,13 +51,31 @@ const ghostButton = {
 const choiceButton = (selected) => ({
   padding: "10px 18px",
   borderRadius: "999px",
-  border: selected ? "2px solid #111827" : "1px solid #d1d5db",
-  background: selected ? "#e5e7eb" : "white",
+  border: selected ? `2px solid ${PRIMARY}` : "1px solid #d1d5db",
+  background: selected ? "#e5edff" : "white",
   cursor: "pointer",
   fontWeight: 600,
   marginRight: "8px",
   minWidth: "80px",
 });
+
+function StatusPill({ status }) {
+  const ok = status === "Connected";
+  return (
+    <span
+      style={{
+        padding: "2px 10px",
+        borderRadius: "999px",
+        background: ok ? "#DCFCE7" : "#FEE2E2",
+        color: ok ? "#166534" : "#991B1B",
+        fontSize: "12px",
+        fontWeight: 600,
+      }}
+    >
+      {status}
+    </span>
+  );
+}
 
 /**
  * 简单价格走势图（带 Y 轴刻度），用于玩家界面
@@ -114,11 +132,19 @@ function PriceChart({ data }) {
     yTicks.push({ y, value: priceVal });
   }
 
+  const last = data[data.length - 1];
+  const lastX =
+    paddingLeft + (data.length - 1) * stepX;
+  const lastY =
+    paddingTop +
+    (1 - (last.price - minP) / range) * innerHeight;
+
   return (
     <svg
-      width={width}
-      height={height}
+      viewBox={`0 0 ${width} ${height}`}
       style={{
+        width: "100%",
+        maxWidth: "360px",
         background: "#f9fafb",
         borderRadius: "12px",
         border: "1px solid #e5e7eb",
@@ -159,7 +185,7 @@ function PriceChart({ data }) {
       {/* 折线 */}
       <polyline
         fill="none"
-        stroke="#111827"
+        stroke={PRIMARY}
         strokeWidth="2"
         points={points}
       />
@@ -169,10 +195,22 @@ function PriceChart({ data }) {
         const y =
           paddingTop +
           (1 - (d.price - minP) / range) * innerHeight;
-        return <circle key={i} cx={x} cy={y} r={3} fill="#111827" />;
+        return <circle key={i} cx={x} cy={y} r={2.5} fill={PRIMARY} />;
       })}
 
-      {/* X 轴回合号（简单标 round1, roundN） */}
+      {/* 最后一个点的价格标签 */}
+      <circle cx={lastX} cy={lastY} r={3} fill={PRIMARY} />
+      <text
+        x={lastX}
+        y={lastY - 6}
+        textAnchor="middle"
+        fontSize="10"
+        fill="#111827"
+      >
+        €{last.price.toFixed(0)}
+      </text>
+
+      {/* X 轴简单 round 标记（首尾） */}
       {data.map((d, i) => {
         const x = paddingLeft + i * stepX;
         const y = paddingTop + innerHeight;
@@ -359,17 +397,26 @@ function App() {
       <div style={pageStyle}>
         <div style={{ maxWidth: "900px", margin: "0 auto" }}>
           <header style={{ marginBottom: "24px" }}>
-            <h1 style={{ margin: 0, fontSize: "32px" }}>Market Panic Game</h1>
-            <p style={{ marginTop: "4px", color: "#6b7280" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "4px",
+              }}
+            >
+              <h1 style={{ margin: 0, fontSize: "32px" }}>
+                Market Panic Game
+              </h1>
+              <StatusPill status={status} />
+            </div>
+            <p style={{ marginTop: "4px", color: "#6b7280", lineHeight: 1.5 }}>
               Simultaneous-move game: students choose Buy / Hold / Sell on their
               phones, teacher triggers news and settles each round.
             </p>
           </header>
 
           <div style={cardStyle}>
-            <p style={{ marginBottom: "12px", color: "#6b7280" }}>
-              Status: <strong>{status}</strong>
-            </p>
             <p style={{ marginBottom: "16px" }}>Choose your role:</p>
             <button style={tabButton(false)} onClick={selectHost}>
               I am the Host (teacher)
@@ -397,7 +444,27 @@ function App() {
               marginBottom: "16px",
             }}
           >
-            <h1 style={{ margin: 0 }}>Market Panic Game</h1>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <h1 style={{ margin: 0 }}>Market Panic Game</h1>
+                <StatusPill status={status} />
+              </div>
+              <p
+                style={{
+                  margin: "4px 0 0 0",
+                  color: "#9ca3af",
+                  fontSize: "13px",
+                }}
+              >
+                Host console – control news & rounds
+              </p>
+            </div>
             <div>
               <button style={tabButton(true)}>Host</button>
               <button style={tabButton(false)}>Client</button>
@@ -424,9 +491,18 @@ function App() {
                 <div>
                   <h2 style={{ margin: 0 }}>Rounds</h2>
                   <p style={{ margin: 0, color: "#6b7280" }}>
-                    Round {round || 1} · Price €{price.toFixed(2)}
+                    Round {round || 1} · Price €{price.toFixed(2)}{" "}
                     {lastChange && (
-                      <>
+                      <span
+                        style={{
+                          color:
+                            lastChange.change > 0
+                              ? "#166534"
+                              : lastChange.change < 0
+                              ? "#991B1B"
+                              : "#374151",
+                        }}
+                      >
                         {" ("}
                         {lastChange.change >= 0 ? "+" : ""}
                         {lastChange.change.toFixed(2)}€
@@ -434,7 +510,7 @@ function App() {
                         {lastChange.pct >= 0 ? "+" : ""}
                         {lastChange.pct.toFixed(1)}%
                         {")"}
-                      </>
+                      </span>
                     )}
                     {roundActive && timeLeft > 0
                       ? ` · Time left: ${timeLeft}s`
@@ -456,7 +532,7 @@ function App() {
 
               <hr style={{ border: 0, borderTop: "1px solid #e5e7eb" }} />
 
-              <h3>Players (host view)</h3>
+              <h3 style={{ marginTop: 12 }}>Players (host view)</h3>
               {Object.keys(players).length === 0 && (
                 <p style={{ color: "#9ca3af" }}>
                   No players yet. Ask students to join as{" "}
@@ -479,7 +555,7 @@ function App() {
             {/* right: news & controls（Host 这里是不带红绿的） */}
             <div style={cardStyle}>
               <h2 style={{ marginTop: 0 }}>News & controls</h2>
-              <p style={{ color: "#6b7280" }}>
+              <p style={{ color: "#6b7280", lineHeight: 1.5 }}>
                 Click <strong>Random news</strong> to draw a scenario, then
                 start a timed round. Students choose Buy / Hold / Sell on their
                 phones.
@@ -523,7 +599,27 @@ function App() {
             marginBottom: "16px",
           }}
         >
-          <h1 style={{ margin: 0 }}>Market Panic Game</h1>
+          <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <h1 style={{ margin: 0 }}>Market Panic Game</h1>
+              <StatusPill status={status} />
+            </div>
+            <p
+              style={{
+                margin: "4px 0 0 0",
+                color: "#9ca3af",
+                fontSize: "13px",
+              }}
+            >
+              Client view – make your decision each round
+            </p>
+          </div>
           <div>
             <button style={tabButton(false)}>Host</button>
             <button style={tabButton(true)}>Client</button>
@@ -531,10 +627,6 @@ function App() {
         </div>
 
         <div style={cardStyle}>
-          <p style={{ marginTop: 0, color: "#6b7280" }}>
-            Status: <strong>{status}</strong>
-          </p>
-
           {!joined ? (
             <>
               <p>Enter your name to join the game:</p>
@@ -606,9 +698,9 @@ function App() {
                   >
                     <div style={{ marginBottom: "4px", color: textColor }}>
                       <strong>
-                        Round {round || 1} · Price €{price.toFixed(2)}
+                        Round {round || 1} · Price €{price.toFixed(2)}{" "}
                         {lastChange && (
-                          <>
+                          <span>
                             {" ("}
                             {lastChange.change >= 0 ? "+" : ""}
                             {lastChange.change.toFixed(2)}€
@@ -616,7 +708,7 @@ function App() {
                             {lastChange.pct >= 0 ? "+" : ""}
                             {lastChange.pct.toFixed(1)}%
                             {")"}
-                          </>
+                          </span>
                         )}
                         {roundActive && timeLeft > 0
                           ? ` · Time left: ${timeLeft}s`
@@ -663,8 +755,20 @@ function App() {
                 </button>
               </div>
               {myChoice && (
-                <p>
-                  You selected: <strong>{myChoice.toUpperCase()}</strong>
+                <p style={{ marginTop: 4 }}>
+                  You selected:{" "}
+                  <strong
+                    style={{
+                      color:
+                        myChoice === "buy"
+                          ? "#166534"
+                          : myChoice === "sell"
+                          ? "#991B1B"
+                          : PRIMARY,
+                    }}
+                  >
+                    {myChoice.toUpperCase()}
+                  </strong>
                 </p>
               )}
             </>
@@ -676,3 +780,4 @@ function App() {
 }
 
 export default App;
+
