@@ -59,33 +59,60 @@ const choiceButton = (selected) => ({
   minWidth: "80px",
 });
 
-// 简单价格走势图组件（玩家界面用）
+/**
+ * 简单价格走势图（带 Y 轴刻度），用于玩家界面
+ * data: [{ round, price }]
+ */
 function PriceChart({ data }) {
   if (!data || data.length === 0) return null;
 
-  const width = 320;
-  const height = 120;
-  const padding = 10;
+  const width = 360;
+  const height = 170;
+  const paddingLeft = 48; // 给 Y 轴刻度留空间
+  const paddingRight = 10;
+  const paddingTop = 10;
+  const paddingBottom = 26;
 
   const prices = data.map((d) => d.price);
-  const minP = Math.min(...prices);
-  const maxP = Math.max(...prices);
+  let minP = Math.min(...prices);
+  let maxP = Math.max(...prices);
+
+  // 给上下留一点 margin，看起来不挤
+  if (minP === maxP) {
+    minP -= 1;
+    maxP += 1;
+  } else {
+    const extra = (maxP - minP) * 0.1;
+    minP -= extra;
+    maxP += extra;
+  }
   const range = maxP - minP || 1;
 
+  const innerWidth = width - paddingLeft - paddingRight;
+  const innerHeight = height - paddingTop - paddingBottom;
+
   const stepX =
-    data.length > 1
-      ? (width - 2 * padding) / (data.length - 1)
-      : width - 2 * padding;
+    data.length > 1 ? innerWidth / (data.length - 1) : innerWidth;
 
   const points = data
     .map((d, i) => {
-      const x = padding + i * stepX;
+      const x = paddingLeft + i * stepX;
       const y =
-        padding +
-        (1 - (d.price - minP) / range) * (height - 2 * padding);
+        paddingTop +
+        (1 - (d.price - minP) / range) * innerHeight;
       return `${x},${y}`;
     })
     .join(" ");
+
+  // Y 轴刻度（例如 4 个）
+  const ticksCount = 4;
+  const yTicks = [];
+  for (let i = 0; i <= ticksCount; i++) {
+    const t = i / ticksCount; // 0 -> max, 1 -> min
+    const priceVal = maxP - t * range;
+    const y = paddingTop + t * innerHeight;
+    yTicks.push({ y, value: priceVal });
+  }
 
   return (
     <svg
@@ -93,22 +120,81 @@ function PriceChart({ data }) {
       height={height}
       style={{
         background: "#f9fafb",
-        borderRadius: "8px",
+        borderRadius: "12px",
         border: "1px solid #e5e7eb",
       }}
     >
+      {/* Y 轴 + 网格线 */}
+      <line
+        x1={paddingLeft}
+        y1={paddingTop}
+        x2={paddingLeft}
+        y2={paddingTop + innerHeight}
+        stroke="#d1d5db"
+        strokeWidth="1"
+      />
+      {yTicks.map((tick, idx) => (
+        <g key={idx}>
+          <line
+            x1={paddingLeft}
+            y1={tick.y}
+            x2={width - paddingRight}
+            y2={tick.y}
+            stroke="#e5e7eb"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+          <text
+            x={paddingLeft - 6}
+            y={tick.y + 3}
+            textAnchor="end"
+            fontSize="10"
+            fill="#6b7280"
+          >
+            €{tick.value.toFixed(0)}
+          </text>
+        </g>
+      ))}
+
+      {/* 折线 */}
       <polyline
         fill="none"
         stroke="#111827"
         strokeWidth="2"
         points={points}
       />
+      {/* 拐点圆点 */}
       {data.map((d, i) => {
-        const x = padding + i * stepX;
+        const x = paddingLeft + i * stepX;
         const y =
-          padding +
-          (1 - (d.price - minP) / range) * (height - 2 * padding);
+          paddingTop +
+          (1 - (d.price - minP) / range) * innerHeight;
         return <circle key={i} cx={x} cy={y} r={3} fill="#111827" />;
+      })}
+
+      {/* X 轴回合号（简单标 round1, roundN） */}
+      {data.map((d, i) => {
+        const x = paddingLeft + i * stepX;
+        const y = paddingTop + innerHeight;
+        const label =
+          i === 0
+            ? `R${d.round}`
+            : i === data.length - 1
+            ? `R${d.round}`
+            : "";
+        if (!label) return null;
+        return (
+          <text
+            key={i}
+            x={x}
+            y={y + 16}
+            textAnchor="middle"
+            fontSize="10"
+            fill="#6b7280"
+          >
+            {label}
+          </text>
+        );
       })}
     </svg>
   );
@@ -127,12 +213,12 @@ function App() {
   const [players, setPlayers] = useState({});
   const [myChoice, setMyChoice] = useState(null);
 
-  // 回合 / 计时
+  // round / timer
   const [round, setRound] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [roundActive, setRoundActive] = useState(false);
 
-  // 价格历史（给玩家画折线图）
+  // price history for chart
   const [priceHistory, setPriceHistory] = useState([]);
 
   // ---- socket listeners ----
@@ -255,7 +341,7 @@ function App() {
     socket.emit("random_news");
   };
 
-  // 默认 30s
+  // 默认 30 秒
   const startRound = (duration = 30) => {
     socket.emit("start_round", duration);
   };
@@ -390,7 +476,7 @@ function App() {
               </ul>
             </div>
 
-            {/* right: news & controls */}
+            {/* right: news & controls（Host 这里是不带红绿的） */}
             <div style={cardStyle}>
               <h2 style={{ marginTop: 0 }}>News & controls</h2>
               <p style={{ color: "#6b7280" }}>
@@ -399,47 +485,24 @@ function App() {
                 phones.
               </p>
 
-              {/* 新闻框：根据涨跌变色 */}
-              {(() => {
-                let bg = "#f3f4f6"; // neutral
-                let textColor = "#111827";
-
-                if (
-                  lastChange &&
-                  typeof lastChange.change === "number"
-                ) {
-                  if (lastChange.change > 0) {
-                    bg = "#d1fae5"; // light green
-                    textColor = "#065f46";
-                  } else if (lastChange.change < 0) {
-                    bg = "#fee2e2"; // light red
-                    textColor = "#991b1b";
-                  }
-                }
-
-                return (
-                  <div
-                    style={{
-                      marginTop: "16px",
-                      padding: "12px",
-                      borderRadius: "12px",
-                      background: bg,
-                      minHeight: "70px",
-                      border: "1px solid #e5e7eb",
-                    }}
-                  >
-                    {news ? (
-                      <span style={{ color: textColor, fontWeight: 700 }}>
-                        {news}
-                      </span>
-                    ) : (
-                      <span style={{ color: "#9ca3af" }}>
-                        No news yet. Click “Random news” to generate one.
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: "#f9fafb",
+                  minHeight: "70px",
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {news ? (
+                  <span>{news}</span>
+                ) : (
+                  <span style={{ color: "#9ca3af" }}>
+                    No news yet. Click “Random news” to generate one.
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -492,7 +555,7 @@ function App() {
             </>
           ) : (
             <>
-              <p style={{ marginBottom: "8px" }}>
+              <p style={{ marginBottom: "4px" }}>
                 Joined as <strong>{name}</strong>
               </p>
 
@@ -513,37 +576,59 @@ function App() {
                 </strong>
               </p>
 
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  background: "#f9fafb",
-                  marginBottom: "16px",
-                }}
-              >
-                <div style={{ marginBottom: "4px" }}>
-                  <strong>
-                    Round {round || 1} · Price €{price.toFixed(2)}
-                    {lastChange && (
-                      <>
-                        {" ("}
-                        {lastChange.change >= 0 ? "+" : ""}
-                        {lastChange.change.toFixed(2)}€
-                        {", "}
-                        {lastChange.pct >= 0 ? "+" : ""}
-                        {lastChange.pct.toFixed(1)}%
-                        {")"}
-                      </>
-                    )}
-                    {roundActive && timeLeft > 0
-                      ? ` · Time left: ${timeLeft}s`
-                      : ""}
-                  </strong>
-                </div>
-                <div style={{ color: "#6b7280" }}>
-                  {news || "Waiting for the host to send news..."}
-                </div>
-              </div>
+              {/* 彩色新闻 + 回合信息 */}
+              {(() => {
+                let bg = "#f3f4f6";
+                let textColor = "#111827";
+
+                if (
+                  lastChange &&
+                  typeof lastChange.change === "number"
+                ) {
+                  if (lastChange.change > 0) {
+                    bg = "#d1fae5"; // light green
+                    textColor = "#065f46";
+                  } else if (lastChange.change < 0) {
+                    bg = "#fee2e2"; // light red
+                    textColor = "#991b1b";
+                  }
+                }
+
+                return (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      background: bg,
+                      marginBottom: "16px",
+                      border: "1px solid #e5e7eb",
+                    }}
+                  >
+                    <div style={{ marginBottom: "4px", color: textColor }}>
+                      <strong>
+                        Round {round || 1} · Price €{price.toFixed(2)}
+                        {lastChange && (
+                          <>
+                            {" ("}
+                            {lastChange.change >= 0 ? "+" : ""}
+                            {lastChange.change.toFixed(2)}€
+                            {", "}
+                            {lastChange.pct >= 0 ? "+" : ""}
+                            {lastChange.pct.toFixed(1)}%
+                            {")"}
+                          </>
+                        )}
+                        {roundActive && timeLeft > 0
+                          ? ` · Time left: ${timeLeft}s`
+                          : ""}
+                      </strong>
+                    </div>
+                    <div style={{ color: textColor }}>
+                      {news || "Waiting for the host to send news..."}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 价格走势图 */}
               {priceHistory.length > 1 && (
