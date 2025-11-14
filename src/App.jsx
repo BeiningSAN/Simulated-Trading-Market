@@ -59,6 +59,61 @@ const choiceButton = (selected) => ({
   minWidth: "80px",
 });
 
+// 简单价格走势图组件（玩家界面用）
+function PriceChart({ data }) {
+  if (!data || data.length === 0) return null;
+
+  const width = 320;
+  const height = 120;
+  const padding = 10;
+
+  const prices = data.map((d) => d.price);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+
+  const stepX =
+    data.length > 1
+      ? (width - 2 * padding) / (data.length - 1)
+      : width - 2 * padding;
+
+  const points = data
+    .map((d, i) => {
+      const x = padding + i * stepX;
+      const y =
+        padding +
+        (1 - (d.price - minP) / range) * (height - 2 * padding);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      style={{
+        background: "#f9fafb",
+        borderRadius: "8px",
+        border: "1px solid #e5e7eb",
+      }}
+    >
+      <polyline
+        fill="none"
+        stroke="#111827"
+        strokeWidth="2"
+        points={points}
+      />
+      {data.map((d, i) => {
+        const x = padding + i * stepX;
+        const y =
+          padding +
+          (1 - (d.price - minP) / range) * (height - 2 * padding);
+        return <circle key={i} cx={x} cy={y} r={3} fill="#111827" />;
+      })}
+    </svg>
+  );
+}
+
 function App() {
   const [role, setRole] = useState(null); // "host" | "player" | null
   const [name, setName] = useState("");
@@ -72,10 +127,13 @@ function App() {
   const [players, setPlayers] = useState({});
   const [myChoice, setMyChoice] = useState(null);
 
-  // round / timer
+  // 回合 / 计时
   const [round, setRound] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [roundActive, setRoundActive] = useState(false);
+
+  // 价格历史（给玩家画折线图）
+  const [priceHistory, setPriceHistory] = useState([]);
 
   // ---- socket listeners ----
   useEffect(() => {
@@ -108,6 +166,12 @@ function App() {
 
       if (typeof payload.price === "number") {
         setPrice(payload.price);
+
+        // 记录价格历史
+        setPriceHistory((prev) => {
+          const nextRound = prev.length + 1;
+          return [...prev, { round: nextRound, price: payload.price }];
+        });
       }
 
       if (
@@ -133,6 +197,7 @@ function App() {
       setTimeLeft(0);
       setRoundActive(false);
       setLastChange(null);
+      setPriceHistory([]);
     });
 
     // { round, duration }
@@ -141,7 +206,6 @@ function App() {
       setTimeLeft(duration);
       setRoundActive(true);
       setMyChoice(null);
-      // reset local choices visually, server也已经清空choice
     });
 
     return () => {
@@ -191,7 +255,8 @@ function App() {
     socket.emit("random_news");
   };
 
-  const startRound = (duration = 10) => {
+  // 默认 30s
+  const startRound = (duration = 30) => {
     socket.emit("start_round", duration);
   };
 
@@ -293,9 +358,9 @@ function App() {
                 <div>
                   <button
                     style={{ ...ghostButton, marginRight: "8px" }}
-                    onClick={() => startRound(10)}
+                    onClick={() => startRound(30)}
                   >
-                    Start 10s round
+                    Start 30s round
                   </button>
                   <button style={ghostButton} onClick={triggerRandomNews}>
                     Random news
@@ -329,28 +394,52 @@ function App() {
             <div style={cardStyle}>
               <h2 style={{ marginTop: 0 }}>News & controls</h2>
               <p style={{ color: "#6b7280" }}>
-                Click <strong>Random news</strong> to draw a scenario, then start
-                a timed round. Students choose Buy / Hold / Sell on their
+                Click <strong>Random news</strong> to draw a scenario, then
+                start a timed round. Students choose Buy / Hold / Sell on their
                 phones.
               </p>
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "12px",
-                  borderRadius: "12px",
-                  background: "#f9fafb",
-                  minHeight: "70px",
-                  border: "1px dashed #e5e7eb",
-                }}
-              >
-                {news ? (
-                  <span>{news}</span>
-                ) : (
-                  <span style={{ color: "#9ca3af" }}>
-                    No news yet. Click &ldquo;Random news&rdquo; to generate one.
-                  </span>
-                )}
-              </div>
+
+              {/* 新闻框：根据涨跌变色 */}
+              {(() => {
+                let bg = "#f3f4f6"; // neutral
+                let textColor = "#111827";
+
+                if (
+                  lastChange &&
+                  typeof lastChange.change === "number"
+                ) {
+                  if (lastChange.change > 0) {
+                    bg = "#d1fae5"; // light green
+                    textColor = "#065f46";
+                  } else if (lastChange.change < 0) {
+                    bg = "#fee2e2"; // light red
+                    textColor = "#991b1b";
+                  }
+                }
+
+                return (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      padding: "12px",
+                      borderRadius: "12px",
+                      background: bg,
+                      minHeight: "70px",
+                      border: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {news ? (
+                      <span style={{ color: textColor, fontWeight: 700 }}>
+                        {news}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#9ca3af" }}>
+                        No news yet. Click “Random news” to generate one.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -403,8 +492,25 @@ function App() {
             </>
           ) : (
             <>
-              <p style={{ marginBottom: "12px" }}>
+              <p style={{ marginBottom: "8px" }}>
                 Joined as <strong>{name}</strong>
+              </p>
+
+              {/* 玩家自己的余额 */}
+              <p
+                style={{
+                  marginTop: "0",
+                  marginBottom: "16px",
+                  color: "#374151",
+                }}
+              >
+                Balance:{" "}
+                <strong>
+                  €
+                  {players[socket.id]?.balance !== undefined
+                    ? players[socket.id].balance.toFixed(2)
+                    : "0.00"}
+                </strong>
               </p>
 
               <div
@@ -438,6 +544,14 @@ function App() {
                   {news || "Waiting for the host to send news..."}
                 </div>
               </div>
+
+              {/* 价格走势图 */}
+              {priceHistory.length > 1 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <h3 style={{ margin: "0 0 8px 0" }}>Price history</h3>
+                  <PriceChart data={priceHistory} />
+                </div>
+              )}
 
               <h3>Your action</h3>
               <p style={{ color: "#6b7280" }}>
