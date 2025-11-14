@@ -539,17 +539,42 @@ function App() {
                   <strong>Client</strong> on their phones.
                 </p>
               )}
-              <ul>
-                {Object.entries(players).map(([id, p]) => (
-                  <li key={id}>
-                    <strong>{p.name}</strong> — balance:{" "}
-                    {p.balance.toFixed(2)} — choice:{" "}
-                    {p.choice || (
-                      <span style={{ color: "#9ca3af" }}>none yet</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+
+              {/* 排名：按 balance 从高到低排序 */}
+              {Object.keys(players).length > 0 &&
+                (() => {
+                  const sortedPlayers = Object.entries(players).sort(
+                    ([, a], [, b]) => {
+                      const ba =
+                        typeof a.balance === "number" ? a.balance : 0;
+                      const bb =
+                        typeof b.balance === "number" ? b.balance : 0;
+                      return bb - ba; // 降序
+                    }
+                  );
+
+                  return (
+                    <ol style={{ paddingLeft: "20px" }}>
+                      {sortedPlayers.map(([id, p], index) => (
+                        <li key={id} style={{ marginBottom: "4px" }}>
+                          <strong>
+                            #{index + 1} {p.name}
+                          </strong>
+                          {" — balance: "}
+                          {typeof p.balance === "number"
+                            ? p.balance.toFixed(2)
+                            : "0.00"}
+                          {" — choice: "}
+                          {p.choice || (
+                            <span style={{ color: "#9ca3af" }}>
+                              none yet
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  );
+                })()}
             </div>
 
             {/* right: news & controls（Host 这里是不带红绿的） */}
@@ -780,4 +805,3 @@ function App() {
 }
 
 export default App;
-
