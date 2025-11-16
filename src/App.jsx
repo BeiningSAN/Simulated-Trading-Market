@@ -379,8 +379,8 @@ function App() {
     socket.emit("random_news");
   };
 
-  // 默认 30 秒
-  const startRound = (duration = 30) => {
+  // 默认 60 秒
+  const startRound = (duration = 60) => {
     socket.emit("start_round", duration);
   };
 
@@ -520,9 +520,9 @@ function App() {
                 <div>
                   <button
                     style={{ ...ghostButton, marginRight: "8px" }}
-                    onClick={() => startRound(30)}
+                    onClick={() => startRound(60)}
                   >
-                    Start 30s round
+                    Start 60s round
                   </button>
                   <button style={ghostButton} onClick={triggerRandomNews}>
                     Random news
